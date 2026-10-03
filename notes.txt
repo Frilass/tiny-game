@@ -1,0 +1,8 @@
+server start:
+npx serve .
+
+local server:
+http://localhost:3000
+
+Phone server:
+http://192.168.178.42:3000

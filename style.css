@@ -1,0 +1,43 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    font-family: Arial, sans-serif;
+
+    background: #111;
+    color: white;
+}
+
+.game {
+    width: min(90%, 400px);
+    text-align: center;
+}
+
+h1 {
+    font-size: 32px;
+}
+
+#score {
+    font-size: 64px;
+    margin: 30px 0;
+}
+
+button {
+    width: 100%;
+    padding: 18px;
+
+    font-size: 22px;
+
+    border: none;
+    border-radius: 12px;
+
+    cursor: pointer;
+}
