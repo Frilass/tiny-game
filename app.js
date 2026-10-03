@@ -8,3 +8,7 @@ trainButton.addEventListener("click", () => {
 
     scoreDisplay.textContent = score;
 });
+
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js");
+}
