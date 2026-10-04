@@ -49,3 +49,9 @@ button {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
+
+#restartButton {
+    margin-top: 15px;
+    background: #333;
+    color: white;
+}
