@@ -2,14 +2,14 @@
 //
 // Online loads are network-first: a fresh response replaces the cache entry,
 // and a failed network read falls back to that entry so offline play still works.
-// CACHE_NAME is bumped so activate() drops caches written by the old
-// cache-first workers (tiny-game-v2 and slime-pit-v1). Those workers answered
-// from disk and would keep painting a new page with an old stylesheet.
+// CACHE_NAME is bumped so activate() drops the previous cache and an
+// installed phone reloads onto this version. slime-pit-v3 is the shared
+// walk-bound fix; v2 was the network-first update.
 // Add new URLs to FILES_TO_CACHE so the first install can play offline
 // before each file has been requested on its own.
 // Paths are relative to this script, which keeps GitHub Pages subpaths working.
 
-const CACHE_NAME = "slime-pit-v2";
+const CACHE_NAME = "slime-pit-v3";
 
 const FILES_TO_CACHE = [
     "./",

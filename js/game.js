@@ -14,6 +14,14 @@
     "use strict";
 
     const WORLD_W = 520;
+    // Shared floor. The knight used to stop 108px from the wall while a
+    // slime could be shoved to radius+10, then hold still inside its own
+    // bite and outside the sword.
+    const WALK_MIN = 108;
+    const WALK_MAX = WORLD_W - 108;
+    // Extra pixels a swing or a bite may still connect after it starts.
+    // Both sides use it so neither reach is longer.
+    const MELEE_SLOP = 6;
     const MAX_ENEMIES = 4;
     const PLAYER_SPEED = 118;
     const BASE_SWING = 0.34;
@@ -89,6 +97,8 @@
     let dirty = false;
     let saveTimer = 0;
     let resetArmedUntil = 0;
+    // How long the knight has been pinned on an edge, short of his target.
+    let stuckTime = 0;
     let lastHud = "";
 
     // XP required to leave this level. Early levels are a few slimes;
@@ -106,12 +116,29 @@
         return Math.max(swing + 0.04, BASE_INTERVAL / save.attackSpeed);
     }
 
-    function playerStopDistance(enemy) {
-        return 30 + enemy.radius;
+    // Sword and bite share one distance. The bite used to be longer, so a
+    // slime on the edge could stop and hit the knight while he was still
+    // short of the distance that starts his swing.
+    function meleeReach(enemy) {
+        return 42 + enemy.radius;
     }
 
-    function enemyAttackReach(enemy) {
-        return 42 + enemy.radius;
+    function inMelee(enemy) {
+        return Math.abs(enemy.x - sim.player.x) <= meleeReach(enemy) + MELEE_SLOP;
+    }
+
+    // True when some spot the knight can walk to is inside sword range.
+    function canReach(enemy) {
+        const stand = Math.max(WALK_MIN, Math.min(WALK_MAX, enemy.x));
+        return Math.abs(enemy.x - stand) <= meleeReach(enemy) + MELEE_SLOP;
+    }
+
+    function clampWalk(entity) {
+        if (entity.x < WALK_MIN) {
+            entity.x = WALK_MIN;
+        } else if (entity.x > WALK_MAX) {
+            entity.x = WALK_MAX;
+        }
     }
 
     function formatNumber(value) {
@@ -301,20 +328,27 @@
             alive: true,
             deathT: 0
         });
+        // Keep the spawn on the shared floor even if the caller asked
+        // for a point past the knight's last step.
+        clampWalk(sim.enemies[sim.enemies.length - 1]);
     }
 
     function pickSpawnX() {
+        const lo = 190;
+        const hi = WALK_MAX;
         for (let attempt = 0; attempt < 8; attempt++) {
-            const x = 190 + Math.random() * (WORLD_W - 250);
+            const x = lo + Math.random() * Math.max(1, hi - lo);
             if (Math.abs(x - sim.player.x) > 120) {
                 return x;
             }
         }
-        return WORLD_W - 70;
+        return sim.player.x > (lo + hi) / 2 ? lo : hi;
     }
 
     function seedEnemies() {
-        const slots = [268, 348, 420, 478];
+        // 420 and 478 used to sit past WALK_MAX, so the two rightmost
+        // slimes now stop on the knight's last step instead of stacking.
+        const slots = [268, 348, 380, 412];
         for (let i = 0; i < slots.length; i++) {
             spawnEnemy(slots[i]);
         }
@@ -325,7 +359,9 @@
         let bestDist = Infinity;
         for (let i = 0; i < sim.enemies.length; i++) {
             const enemy = sim.enemies[i];
-            if (!enemy.alive) {
+            // Skip a slime the knight cannot walk to. Locking onto it
+            // left him running in place while it kept biting.
+            if (!enemy.alive || !canReach(enemy)) {
                 continue;
             }
             const dist = Math.abs(enemy.x - sim.player.x);
@@ -342,11 +378,11 @@
         let bestDist = Infinity;
         for (let i = 0; i < sim.enemies.length; i++) {
             const enemy = sim.enemies[i];
-            if (!enemy.alive) {
+            if (!enemy.alive || !inMelee(enemy)) {
                 continue;
             }
             const dist = Math.abs(enemy.x - sim.player.x);
-            if (dist <= playerStopDistance(enemy) + 10 && dist < bestDist) {
+            if (dist < bestDist) {
                 best = enemy;
                 bestDist = dist;
             }
@@ -364,18 +400,12 @@
         victim.hitFlash = 0.12;
         const dir = Math.sign(victim.x - sim.player.x) || sim.player.facing;
         victim.x += dir * 7;
+        // Knockback used to leave the slime past the knight's walk limit.
+        clampWalk(victim);
         floater(victim.x, -victim.radius * 2.1, "-" + formatNumber(damage), "#ffe4e4");
         burst(victim.x - dir * victim.radius * 0.3, -victim.radius * 0.8, "#fff1c9", 4, 28);
         if (victim.hp <= 0) {
             defeat(victim);
-        }
-    }
-
-    function clampX(entity, pad) {
-        if (entity.x < pad) {
-            entity.x = pad;
-        } else if (entity.x > WORLD_W - pad) {
-            entity.x = WORLD_W - pad;
         }
     }
 
@@ -405,7 +435,7 @@
         } else if (player.attackT <= 0) {
             const dx = target.x - player.x;
             const dist = Math.abs(dx);
-            const stop = playerStopDistance(target);
+            const stop = meleeReach(target);
             player.facing = dx === 0 ? player.facing : Math.sign(dx);
             if (dist > stop + 0.8) {
                 player.mode = "run";
@@ -438,14 +468,15 @@
             }
         }
         player.attackCd = Math.max(0, player.attackCd - dt);
-        clampX(player, 108);
+        clampWalk(player);
     }
 
     function updateEnemy(enemy, dt, isEngaged) {
         if (!enemy.alive) {
             return;
         }
-        const moving = isEngaged && Math.abs(enemy.x - sim.player.x) > enemyAttackReach(enemy) - 4;
+        const reach = meleeReach(enemy);
+        const moving = isEngaged && Math.abs(enemy.x - sim.player.x) > reach - 4;
         enemy.phase += dt * (moving ? 8 : 4.4);
         enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
         enemy.attackCd = Math.max(0, enemy.attackCd - dt);
@@ -454,7 +485,7 @@
             enemy.attackT += dt / 0.42;
             if (!enemy.hitApplied && enemy.attackT >= 0.62) {
                 enemy.hitApplied = true;
-                if (Math.abs(enemy.x - sim.player.x) <= enemyAttackReach(enemy) + 6) {
+                if (inMelee(enemy)) {
                     damagePlayer(enemy.damage);
                 }
             }
@@ -472,7 +503,6 @@
         const dx = sim.player.x - enemy.x;
         const dist = Math.abs(dx);
         enemy.facing = dx === 0 ? enemy.facing : Math.sign(dx);
-        const reach = enemyAttackReach(enemy);
         if (dist > reach) {
             enemy.x += enemy.facing * enemy.speed * dt;
         } else if (enemy.attackT <= 0 && enemy.attackCd <= 0) {
@@ -506,8 +536,37 @@
             }
         }
         for (let i = 0; i < living.length; i++) {
-            clampX(living[i], living[i].radius + 10);
+            clampWalk(living[i]);
         }
+    }
+
+    // Clamp is the immediate recovery: a slime shoved past the floor is
+    // back on it the same frame. If one is still outside sword range
+    // after that, pull it to the knight so the lock cannot last.
+    function recoverStuck(dt) {
+        const player = sim.player;
+        let stranded = null;
+        for (let i = 0; i < sim.enemies.length; i++) {
+            const enemy = sim.enemies[i];
+            if (!enemy.alive) {
+                continue;
+            }
+            clampWalk(enemy);
+            if (!canReach(enemy)) {
+                stranded = enemy;
+            }
+        }
+        if (!stranded || player.mode === "down") {
+            stuckTime = 0;
+            return;
+        }
+        stuckTime += dt;
+        if (stuckTime < 0.4) {
+            return;
+        }
+        stranded.x = player.x;
+        clampWalk(stranded);
+        stuckTime = 0;
     }
 
     function updateEnemies(dt) {
@@ -529,6 +588,9 @@
             if (enemy === target) {
                 continue;
             }
+            if (!canReach(enemy)) {
+                continue;
+            }
             const dist = Math.abs(enemy.x - sim.player.x);
             if (dist < 120 && dist < extraDist) {
                 extra = enemy;
@@ -542,6 +604,7 @@
             updateEnemy(sim.enemies[i], dt, engaged.has(sim.enemies[i]));
         }
         separateEnemies();
+        recoverStuck(dt);
     }
 
     function updateSpawns(dt) {
