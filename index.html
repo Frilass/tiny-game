@@ -21,8 +21,91 @@
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" href="icons/icon-192.png">
     <link rel="stylesheet" href="style.css">
+    <!--
+      These few rules sit after the stylesheet on purpose. The previous
+      Tiny Game cache can still hand back its style.css (every button
+      width: 100%) for one paint. Without a size on the canvas, the game
+      loop measured that button-stretched stage and grew the bitmap without
+      bound, so the phone showed a giant Reset and a black screen. Inline
+      rules win over that stale sheet. style.css restyles the same elements
+      once the fresh file arrives.
+    -->
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: #1a120c;
+            overflow: hidden;
+        }
+        body { display: block; }
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        #stage {
+            flex: 1 1 auto;
+            min-height: 160px;
+            position: relative;
+        }
+        #game {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #reset {
+            width: auto;
+            max-width: 6rem;
+            font-size: 12px;
+            padding: 8px;
+        }
+        #shop-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .upgrade { width: auto; }
+    </style>
 </head>
 <body>
+    <script>
+        // Register before the game scripts. A stale stylesheet used to hang
+        // the first paint; waiting until the bottom of game.js meant the
+        // new worker never got to replace that sheet. file:// has no
+        // service worker, so anything but http(s) is skipped.
+        (function () {
+            if (location.protocol !== "http:" && location.protocol !== "https:") {
+                return;
+            }
+            if (!("serviceWorker" in navigator)) {
+                return;
+            }
+            var reloading = false;
+            navigator.serviceWorker.addEventListener("controllerchange", function () {
+                if (reloading) {
+                    return;
+                }
+                var now = Date.now();
+                var recent = [];
+                try {
+                    recent = JSON.parse(sessionStorage.getItem("slime-pit-sw-reloads") || "[]");
+                } catch (err) {
+                    recent = [];
+                }
+                recent = recent.filter(function (stamp) { return now - stamp < 10000; });
+                if (recent.length >= 2) {
+                    return;
+                }
+                recent.push(now);
+                try {
+                    sessionStorage.setItem("slime-pit-sw-reloads", JSON.stringify(recent));
+                } catch (err) {}
+                reloading = true;
+                location.reload();
+            });
+            navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" }).catch(function () {});
+        })();
+    </script>
     <div id="app">
         <header id="hud">
             <div class="stats">

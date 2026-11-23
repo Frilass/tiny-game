@@ -784,10 +784,29 @@
         window.addEventListener("pagehide", flushSave);
     }
 
+    // The bitmap size must not become the element's layout size. A stale
+    // stylesheet leaves the canvas at its attribute size, the stage grows to
+    // fit it, and the next measure writes an even bigger bitmap. Pin the
+    // display size, and never measure larger than the screen.
+    canvas.style.display = "block";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    stage.style.minHeight = "160px";
+
     function layout() {
+        const maxW = Math.max(1, window.innerWidth || 1);
+        const maxH = Math.max(1, window.innerHeight || 1);
         const rect = stage.getBoundingClientRect();
-        const w = Math.max(1, rect.width);
-        const h = Math.max(1, rect.height);
+        let w = rect.width;
+        let h = rect.height;
+        if (!isFinite(w) || w < 1) {
+            w = maxW;
+        }
+        if (!isFinite(h) || h < 1) {
+            h = Math.max(160, Math.round(maxH * 0.45));
+        }
+        w = Math.min(w, maxW);
+        h = Math.min(h, maxH);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const bufferW = Math.max(1, Math.floor(w * dpr));
         const bufferH = Math.max(1, Math.floor(h * dpr));
@@ -800,19 +819,6 @@
         view.dpr = dpr;
         view.scale = Math.max(0.35, Math.min(w / WORLD_W, h / 300));
         view.worldW = WORLD_W;
-    }
-
-    // file:// has no service worker. Registering there throws, so the
-    // check stays on http(s) only. Insecure LAN http may also refuse the
-    // worker; the catch keeps that from surfacing as an uncaught error.
-    function registerServiceWorker() {
-        if (location.protocol !== "http:" && location.protocol !== "https:") {
-            return;
-        }
-        if (!("serviceWorker" in navigator)) {
-            return;
-        }
-        navigator.serviceWorker.register("./service-worker.js").catch(function () {});
     }
 
     buildShop();
@@ -849,5 +855,4 @@
     }
 
     requestAnimationFrame(frame);
-    registerServiceWorker();
 })(window.Dungeon = window.Dungeon || {});
