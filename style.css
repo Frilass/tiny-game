@@ -1,57 +1,343 @@
-html,
-body {
-    touch-action: manipulation;
-}
+/* Full-screen idle dungeon. The page itself never scrolls or zooms;
+   the shop region is the only piece allowed to move, and only if a
+   future upgrade list grows past the screen. */
 
 * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
 }
 
+html,
 body {
     margin: 0;
-    min-height: 100vh;
-
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    font-family: Arial, sans-serif;
-
-    background: #111;
-    color: white;
-}
-
-.game {
-    width: min(90%, 400px);
-    text-align: center;
-}
-
-h1 {
-    font-size: 32px;
-}
-
-#score {
-    font-size: 64px;
-    margin: 30px 0;
+    height: 100%;
+    background: #1a120c;
+    color: #f3e6d0;
+    font-family: system-ui, "Segoe UI", sans-serif;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    color-scheme: dark;
 }
 
 button {
-    width: 100%;
-    padding: 18px;
-
-    font-size: 22px;
-
-    border: none;
-    border-radius: 12px;
-
-    cursor: pointer;
-
+    font-family: inherit;
     touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
 }
 
-#restartButton {
-    margin-top: 15px;
-    background: #333;
-    color: white;
+button:focus {
+    outline: none;
+}
+
+button:focus-visible {
+    outline: 2px solid #ffd56a;
+    outline-offset: 2px;
+}
+
+#app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    /* Keeps the HUD and shop clear of the notch and the home indicator. */
+    padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+    background: #1a120c;
+}
+
+#hud,
+#shop {
+    flex: none;
+    background: #140e0b;
+}
+
+#hud {
+    padding: 8px 12px 8px;
+    border-bottom: 1px solid #3a2a22;
+}
+
+.stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    margin-bottom: 6px;
+}
+
+.stat {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat .label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #b5a18e;
+}
+
+.stat strong {
+    font-size: 16px;
+    font-weight: 750;
+}
+
+.stat.gold strong {
+    color: #ffd56a;
+}
+
+.coin {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffe9a6, #e0a322 58%, #8a5a10);
+    box-shadow: inset 0 0 0 1px #6e4810;
+    display: inline-block;
+    align-self: center;
+}
+
+#reset {
+    margin-left: auto;
+    background: transparent;
+    color: #b5a18e;
+    border: 0;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px;
+}
+
+.meter {
+    margin-top: 4px;
+}
+
+.meter-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #cbbba8;
+    margin-bottom: 2px;
+    font-variant-numeric: tabular-nums;
+}
+
+.track {
+    height: 10px;
+    background: #2a1c16;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #4a3428;
+}
+
+#hpFill,
+#xpFill {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+}
+
+#hpFill {
+    background: linear-gradient(90deg, #1c7a34, #7ee08a);
+}
+
+#hpFill.low {
+    background: linear-gradient(90deg, #8e2430, #ef6a5a);
+}
+
+#xpFill {
+    background: linear-gradient(90deg, #2f62c4, #8ec5ff);
+}
+
+#stage {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    background: #120e0c;
+}
+
+#game {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+#toast {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%) translateY(6px);
+    margin: 0;
+    max-width: calc(100% - 24px);
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(20, 12, 8, 0.88);
+    border: 1px solid #6b5344;
+    color: #f6ead8;
+    font-size: 13px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+#shop {
+    padding: 8px 10px 10px;
+    border-top: 1px solid #3a2a22;
+    max-height: 40vh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+#shop h2 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 650;
+    color: #b5a18e;
+}
+
+#shop-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.upgrade {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1px;
+    min-height: 52px;
+    padding: 8px 8px 7px;
+    text-align: left;
+    color: #f3e6d0;
+    background: linear-gradient(#4a3428, #2a1c16);
+    border: 1px solid #8a6a45;
+    border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 0 #120c09;
+}
+
+.upgrade:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 0 #120c09;
+}
+
+.upgrade-name {
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.upgrade-rank {
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    color: #e2b84a;
+}
+
+.upgrade-detail {
+    font-size: 11px;
+    color: #d9c7b2;
+}
+
+.upgrade-cost {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffd56a;
+    font-variant-numeric: tabular-nums;
+}
+
+.upgrade.poor .upgrade-cost {
+    color: #e07a6a;
+}
+
+.upgrade:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.upgrade.shake {
+    animation: shop-shake 0.28s linear;
+}
+
+@keyframes shop-shake {
+    0%,
+    100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+}
+
+.noscript {
+    padding: 24px;
+}
+
+@media (max-height: 430px) {
+    #hud {
+        padding: 4px 8px 4px;
+    }
+
+    .stats {
+        margin-bottom: 2px;
+    }
+
+    .stat strong {
+        font-size: 14px;
+    }
+
+    .meter {
+        margin-top: 2px;
+    }
+
+    .track {
+        height: 8px;
+    }
+
+    #shop {
+        padding: 4px 8px 6px;
+    }
+
+    #shop h2 {
+        display: none;
+    }
+
+    .upgrade {
+        min-height: 44px;
+        padding: 4px 6px;
+    }
+}
+
+@media (max-width: 360px) {
+    #shop-buttons {
+        gap: 6px;
+    }
+
+    .upgrade-detail {
+        display: none;
+    }
 }
