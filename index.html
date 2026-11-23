@@ -2,30 +2,71 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-
-    <title>Tiny Game</title>
-
-    <link rel="stylesheet" href="style.css">
+    <!--
+      Relative URLs throughout so the game works from file://, a local
+      static server, and GitHub Pages under a project subpath.
+      The tags below are what iOS needs to add this to the home screen
+      and open it without Safari chrome (standalone, edge-to-edge).
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Slime Pit">
+    <meta name="theme-color" content="#1a120c">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="description" content="An idle dungeon. Your knight hunts slimes while you spend the gold.">
+    <title>Slime Pit</title>
     <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+    <div id="app">
+        <header id="hud">
+            <div class="stats">
+                <div class="stat"><span class="label">Lv</span><strong id="level">1</strong></div>
+                <div class="stat"><span class="label">Str</span><strong id="strength">5</strong></div>
+                <div class="stat"><span class="label">Slain</span><strong id="kills">0</strong></div>
+                <div class="stat gold"><span class="coin" aria-hidden="true"></span><strong id="gold">0</strong></div>
+                <button id="reset" type="button">Reset</button>
+            </div>
+            <div class="meter">
+                <div class="meter-label"><span>HP</span><span id="hpText">48/48</span></div>
+                <div class="track" id="hpTrack" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="48" aria-valuenow="48">
+                    <div id="hpFill"></div>
+                </div>
+            </div>
+            <div class="meter">
+                <div class="meter-label"><span>XP</span><span id="xpText">0/26</span></div>
+                <div class="track" id="xpTrack" role="meter" aria-label="Experience" aria-valuemin="0" aria-valuemax="26" aria-valuenow="0">
+                    <div id="xpFill"></div>
+                </div>
+            </div>
+        </header>
 
-    <main class="game">
-        <h1>Tiny Game</h1>
+        <div id="stage">
+            <canvas id="game" width="520" height="320" aria-label="Dungeon floor. Your knight fights slimes automatically."></canvas>
+            <p id="toast" role="status" aria-live="polite"></p>
+        </div>
 
-        <p>Score</p>
+        <section id="shop" aria-label="Upgrades">
+            <h2>Upgrades</h2>
+            <div id="shop-buttons"></div>
+        </section>
+    </div>
 
-        <div id="score">0</div>
+    <noscript><p class="noscript">Slime Pit needs JavaScript to run.</p></noscript>
 
-        <button id="trainButton">+1 Train</button>
-        <button id="restartButton">Restart Game</button>
-    </main>
-
-    <script src="app.js"></script>
-
+    <!--
+      Classic scripts (not modules) so the game still runs from file://.
+      Order matters: catalogs, then save, then drawing, then the loop.
+    -->
+    <script src="js/enemies.js"></script>
+    <script src="js/upgrades.js"></script>
+    <script src="js/save.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/game.js"></script>
 </body>
 </html>
