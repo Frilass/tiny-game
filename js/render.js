@@ -95,7 +95,7 @@
             ctx.fillText("SLIME PIT", w / 2, headroom * 0.42);
             ctx.font = "600 " + Math.max(11, titleSize * 0.42) + "px Georgia, Palatino, serif";
             ctx.fillStyle = "rgba(255, 210, 160, 0.38)";
-            ctx.fillText("FLOOR 1", w / 2, headroom * 0.42 + titleSize * 0.7);
+            ctx.fillText(view.floorText || "FLOOR 1", w / 2, headroom * 0.42 + titleSize * 0.7);
         }
     }
 

@@ -1,15 +1,14 @@
-// Idle loop for one dungeon floor.
+// Run loop for ten dungeon floors.
 //
-// Each frame the knight runs to the nearest living slime and swings
-// when the sword can reach it. Slimes hop toward the knight and bite
-// back. Kills grant XP, gold, and a small strength bump. Gold spends
-// in the shop (see js/upgrades.js). Level-ups raise max HP and strength.
+// Each frame the knight runs to the nearest living slime he can walk to
+// and swings when the sword can reach it. Slimes hop toward the knight
+// and bite back. Sword and bite share one distance (meleeReach).
 //
-// Death heals the knight back to full at the entrance and keeps every
-// point of progress. Nothing here is a harsh penalty on purpose.
-//
-// A second floor later can swap the backdrop and the enemy pool when a
-// save.floor counter increases; the update order below can stay.
+// A floor spawns a fixed count of one slime kind. When the last one
+// dies, the next floor starts. Floor 10 clears the run. Gold is kept
+// and spent on the menu. XP is spent during the run. A level-up does
+// not change stats. Death ends the run: level, XP, and XP upgrades
+// reset, and the menu comes back.
 (function (Dungeon) {
     "use strict";
 
@@ -22,15 +21,12 @@
     // Extra pixels a swing or a bite may still connect after it starts.
     // Both sides use it so neither reach is longer.
     const MELEE_SLOP = 6;
-    const MAX_ENEMIES = 4;
     const PLAYER_SPEED = 118;
     const BASE_SWING = 0.34;
     const BASE_INTERVAL = 0.76;
     const HP_REGEN = 0.4;
-    const REVIVE_TIME = 1.25;
-    const INVULN_TIME = 1.7;
-    const LEVEL_MAX_HP = 8;
-    const LEVEL_STRENGTH = 1;
+    const DOWN_TIME = 1.05;
+    const INVULN_TIME = 0.7;
 
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
@@ -79,9 +75,20 @@
     };
 
     const ui = {
+        menu: document.getElementById("menu"),
+        run: document.getElementById("run"),
+        summary: document.getElementById("summary"),
+        summaryTitle: document.getElementById("summary-title"),
+        summaryFloor: document.getElementById("summary-floor"),
+        summaryGold: document.getElementById("summary-gold"),
+        summaryButton: document.getElementById("summary-menu"),
+        start: document.getElementById("start"),
+        menuGold: document.getElementById("menu-gold"),
+        permStats: document.getElementById("perm-stats"),
+        floor: document.getElementById("floor"),
+        left: document.getElementById("left"),
         level: document.getElementById("level"),
         strength: document.getElementById("strength"),
-        kills: document.getElementById("kills"),
         gold: document.getElementById("gold"),
         hpText: document.getElementById("hpText"),
         xpText: document.getElementById("xpText"),
@@ -90,8 +97,14 @@
         hpTrack: document.getElementById("hpTrack"),
         xpTrack: document.getElementById("xpTrack"),
         toast: document.getElementById("toast"),
-        reset: document.getElementById("reset")
+        reset: document.getElementById("reset"),
+        shopTitle: document.getElementById("shop-title"),
+        menuNote: document.getElementById("menu-note")
     };
+
+    // "menu" shows the gold shop. "run" is the fight. "summary" is the
+    // death or victory card. Combat only ticks during "run".
+    let mode = "menu";
 
     let toastLeft = 0;
     let dirty = false;
@@ -172,6 +185,9 @@
     function toast(message, duration) {
         ui.toast.textContent = message;
         ui.toast.classList.add("show");
+        if (ui.menuNote) {
+            ui.menuNote.textContent = message;
+        }
         toastLeft = duration || 2.3;
     }
 
@@ -225,19 +241,19 @@
     }
 
     function addXp(amount) {
+        // xp is the unspent shop pool. xpBar is only the level meter.
+        // Crossing a level does not heal or raise a stat.
         save.xp += amount;
+        save.xpBar += amount;
         let gained = 0;
-        while (save.xp >= xpToNext(save.level) && save.level < 200) {
-            save.xp -= xpToNext(save.level);
+        while (save.xpBar >= xpToNext(save.level) && save.level < 99) {
+            save.xpBar -= xpToNext(save.level);
             save.level += 1;
-            save.maxHp += LEVEL_MAX_HP;
-            save.hp = save.maxHp;
-            save.strength = Math.round((save.strength + LEVEL_STRENGTH) * 10) / 10;
             gained += 1;
         }
         if (gained > 0) {
-            sim.banner = { text: "LEVEL " + save.level, life: 1.7 };
-            toast("Level " + save.level + " — stronger, and fully healed");
+            sim.banner = { text: "LEVEL " + save.level, life: 1.6 };
+            toast("Level " + save.level + " — spend XP in the shop");
         }
     }
 
@@ -249,8 +265,9 @@
         enemy.deathT = 0.45;
         enemy.hp = 0;
         save.gold += enemy.gold;
-        save.kills += 1;
-        save.strength = Math.round((save.strength + enemy.strengthGain) * 10) / 10;
+        save.runGold += enemy.gold;
+        save.runKills += 1;
+        save.floorKills += 1;
         addXp(enemy.xp);
         floater(enemy.x, -enemy.radius * 2.3, "+" + enemy.xp + " XP", "#9fd0ff");
         floater(enemy.x, -enemy.radius * 1.5, "+" + enemy.gold + "g", "#ffd56a");
@@ -272,39 +289,16 @@
         if (save.hp <= 0) {
             save.hp = 0;
             player.mode = "down";
-            player.downT = REVIVE_TIME;
+            player.downT = DOWN_TIME;
             player.attackT = 0;
             player.fall = 0;
-            toast("Defeated — reviving at the entrance");
+            toast("Defeated");
         }
     }
 
-    function revivePlayer() {
-        const player = sim.player;
-        save.hp = save.maxHp;
-        player.mode = "idle";
-        player.x = 132;
-        player.facing = 1;
-        player.invuln = INVULN_TIME;
-        player.downT = 0;
-        player.fall = 0;
-        player.attackT = 0;
-        player.attackCd = 0.35;
-        player.flash = 0;
-        for (let i = 0; i < sim.enemies.length; i++) {
-            const enemy = sim.enemies[i];
-            if (enemy.alive && enemy.x < 180) {
-                enemy.x = 190 + Math.random() * 50;
-            }
-        }
-        markDirty();
-    }
-
-    function spawnEnemy(x) {
-        const type = Dungeon.pickEnemyType(save.level);
-        const levels = Math.max(0, save.level - 1);
-        const maxHp = Math.max(1, Math.round(type.hp + levels * type.hpPerLevel));
-        const damage = Math.max(1, Math.round(type.damage + levels * type.damagePerLevel));
+    function spawnEnemy(x, type) {
+        const maxHp = Math.max(1, Math.round(type.hp));
+        const damage = Math.max(1, Math.round(type.damage));
         sim.enemies.push({
             look: type,
             x: x,
@@ -316,7 +310,7 @@
             hop: type.hop,
             attackCooldown: type.attackCooldown,
             xp: type.xp,
-            gold: type.gold + Math.floor(Math.random() * 2),
+            gold: type.gold,
             strengthGain: type.strengthGain,
             facing: x >= sim.player.x ? -1 : 1,
             phase: Math.random() * Math.PI * 2,
@@ -333,25 +327,23 @@
         clampWalk(sim.enemies[sim.enemies.length - 1]);
     }
 
-    function pickSpawnX() {
-        const lo = 190;
+    // Spread `count` slimes across the shared walk span. clampWalk inside
+    // spawnEnemy keeps a wide floor from pushing one past the knight.
+    function spawnCount(count) {
+        sim.enemies = [];
+        const type = Dungeon.floorDef(save.floor);
+        const n = Math.max(0, count);
+        const lo = 220;
         const hi = WALK_MAX;
-        for (let attempt = 0; attempt < 8; attempt++) {
-            const x = lo + Math.random() * Math.max(1, hi - lo);
-            if (Math.abs(x - sim.player.x) > 120) {
-                return x;
-            }
+        for (let i = 0; i < n; i++) {
+            const x = n === 1 ? (lo + hi) / 2 : lo + (hi - lo) * (i / (n - 1));
+            spawnEnemy(x, type);
         }
-        return sim.player.x > (lo + hi) / 2 ? lo : hi;
     }
 
-    function seedEnemies() {
-        // 420 and 478 used to sit past WALK_MAX, so the two rightmost
-        // slimes now stop on the knight's last step instead of stacking.
-        const slots = [268, 348, 380, 412];
-        for (let i = 0; i < slots.length; i++) {
-            spawnEnemy(slots[i]);
-        }
+    function spawnCurrentFloor() {
+        save.floorKills = 0;
+        spawnCount(Dungeon.floorDef(save.floor).count);
     }
 
     function nearestLiving() {
@@ -418,7 +410,7 @@
             player.downT -= dt;
             player.fall = Math.min(1, player.fall + dt / 0.26);
             if (player.downT <= 0) {
-                revivePlayer();
+                openSummary("death");
             }
             return;
         }
@@ -607,7 +599,8 @@
         recoverStuck(dt);
     }
 
-    function updateSpawns(dt) {
+    // Corpses fade, then a cleared floor advances. Nothing respawns.
+    function updateFloor(dt) {
         for (let i = 0; i < sim.enemies.length; i++) {
             const enemy = sim.enemies[i];
             if (!enemy.alive) {
@@ -615,17 +608,27 @@
             }
         }
         sim.enemies = sim.enemies.filter((enemy) => enemy.alive || enemy.deathT > 0);
-        sim.spawnCooldown -= dt;
-        let alive = 0;
-        for (let i = 0; i < sim.enemies.length; i++) {
-            if (sim.enemies[i].alive) {
-                alive += 1;
-            }
+        if (mode !== "run" || sim.enemies.length > 0) {
+            return;
         }
-        if (alive < MAX_ENEMIES && sim.spawnCooldown <= 0) {
-            spawnEnemy(pickSpawnX());
-            sim.spawnCooldown = 0.7;
+        const def = Dungeon.floorDef(save.floor);
+        if (save.floorKills < def.count) {
+            return;
         }
+        if (save.floor >= Dungeon.FLOORS.length) {
+            openSummary("victory");
+            return;
+        }
+        save.floor += 1;
+        save.floorKills = 0;
+        sim.player.x = 132;
+        sim.player.facing = 1;
+        sim.player.invuln = INVULN_TIME;
+        spawnCurrentFloor();
+        const next = Dungeon.floorDef(save.floor);
+        sim.banner = { text: "FLOOR " + save.floor, life: 1.8 };
+        toast("Floor " + save.floor + " — " + next.name);
+        markDirty();
     }
 
     function updateEffects(dt) {
@@ -670,9 +673,15 @@
 
     function update(dt) {
         updateEffects(dt);
+        if (mode !== "run") {
+            return;
+        }
         updatePlayer(dt);
+        if (mode !== "run") {
+            return;
+        }
         updateEnemies(dt);
-        updateSpawns(dt);
+        updateFloor(dt);
     }
 
     function setText(el, value) {
@@ -682,95 +691,251 @@
         }
     }
 
+    function clearRanks(list) {
+        const ranks = {};
+        for (let i = 0; i < list.length; i++) {
+            ranks[list[i].id] = 0;
+        }
+        return ranks;
+    }
+
+    function setScreen(next) {
+        mode = next;
+        ui.menu.hidden = next !== "menu";
+        ui.run.hidden = next === "menu";
+        ui.summary.hidden = next !== "summary";
+    }
+
+    function placeKnight() {
+        const player = sim.player;
+        player.x = 132;
+        player.facing = 1;
+        player.mode = "idle";
+        player.runPhase = 0;
+        player.attackT = 0;
+        player.attackCd = 0.2;
+        player.hitApplied = false;
+        player.invuln = 0.35;
+        player.flash = 0;
+        player.fall = 0;
+        player.downT = 0;
+    }
+
+    // Drops the run. Gold and gold ranks stay. Level goes back to 1.
+    function endRun() {
+        save.inRun = false;
+        save.floor = 1;
+        save.level = 1;
+        save.xp = 0;
+        save.xpBar = 0;
+        save.floorKills = 0;
+        save.runGold = 0;
+        save.runKills = 0;
+        save.xpRanks = clearRanks(Dungeon.XP_UPGRADES);
+        Dungeon.recomputeStats(save, true);
+        save.hp = save.maxHp;
+        sim.enemies = [];
+        flushSave();
+    }
+
+    function openSummary(kind) {
+        if (mode !== "run") {
+            return;
+        }
+        const floor = save.floor;
+        const earned = save.runGold;
+        const won = kind === "victory";
+        endRun();
+        sim.player.mode = "down";
+        sim.player.fall = 1;
+        sim.player.downT = 0;
+        ui.summaryTitle.textContent = won ? "Pit cleared" : "Defeated";
+        ui.summaryFloor.textContent = won
+            ? "All 10 floors are clear."
+            : "Reached floor " + floor + ".";
+        ui.summaryGold.textContent = "Gold earned: " + earned;
+        setScreen("summary");
+        lastHud = "";
+    }
+
+    function startRun() {
+        save.inRun = true;
+        save.floor = 1;
+        save.level = 1;
+        save.xp = 0;
+        save.xpBar = 0;
+        save.floorKills = 0;
+        save.runGold = 0;
+        save.runKills = 0;
+        save.xpRanks = clearRanks(Dungeon.XP_UPGRADES);
+        Dungeon.recomputeStats(save, true);
+        save.hp = save.maxHp;
+        placeKnight();
+        spawnCurrentFloor();
+        sim.banner = { text: "FLOOR 1", life: 1.6 };
+        setScreen("run");
+        lastHud = "";
+        markDirty();
+        flushSave();
+        layout();
+    }
+
+    function resumeRun() {
+        Dungeon.recomputeStats(save, true);
+        placeKnight();
+        const def = Dungeon.floorDef(save.floor);
+        const left = def.count - save.floorKills;
+        if (left <= 0) {
+            save.floorKills = def.count;
+            sim.enemies = [];
+        } else {
+            spawnCount(left);
+        }
+        setScreen("run");
+        layout();
+    }
+
+    function backToMenu() {
+        sim.player.mode = "idle";
+        sim.player.fall = 0;
+        setScreen("menu");
+        lastHud = "";
+        renderHud();
+    }
+
     function renderHud() {
         const hpShown = save.hp <= 0 ? 0 : Math.max(0, Math.round(save.hp));
         const need = xpToNext(save.level);
         const hpRatio = save.maxHp > 0 ? save.hp / save.maxHp : 0;
+        const floorDef = Dungeon.floorDef(save.floor);
+        const left = Math.max(0, floorDef.count - save.floorKills);
         ui.hpFill.style.width = Math.max(0, Math.min(100, hpRatio * 100)) + "%";
         ui.hpFill.classList.toggle("low", hpRatio < 0.3);
-        ui.xpFill.style.width = Math.max(0, Math.min(100, (save.xp / need) * 100)) + "%";
+        const bar = Math.max(0, save.xpBar);
+        ui.xpFill.style.width = Math.max(0, Math.min(100, (bar / need) * 100)) + "%";
+        view.floorText = "FLOOR " + save.floor;
 
-        const rankBits = [];
-        const upgrades = Dungeon.UPGRADES;
-        for (let i = 0; i < upgrades.length; i++) {
-            rankBits.push(save.ranks[upgrades[i].id] || 0);
-        }
         const sig = [
+            mode,
             save.level,
             save.xp,
+            bar,
             hpShown,
             save.maxHp,
             save.gold,
             save.strength,
-            save.kills,
+            save.attackSpeed,
+            save.floor,
+            left,
             need
-        ].concat(rankBits).join("|");
+        ].concat(rankList(save.goldRanks), rankList(save.xpRanks)).join("|");
         if (sig === lastHud) {
             return;
         }
         lastHud = sig;
 
+        setText(ui.floor, save.floor);
+        setText(ui.left, left);
         setText(ui.level, save.level);
         setText(ui.strength, formatNumber(save.strength));
-        setText(ui.kills, save.kills);
         setText(ui.gold, formatGold(save.gold));
+        setText(ui.menuGold, formatGold(save.gold));
+        setText(ui.permStats, "Power " + formatNumber(save.strength) + "  ·  HP " + save.maxHp + "  ·  Speed " + save.attackSpeed.toFixed(1));
         setText(ui.hpText, hpShown + "/" + save.maxHp);
-        setText(ui.xpText, save.xp + "/" + need);
+        setText(ui.xpText, bar + "/" + need);
+        setText(ui.shopTitle, "XP shop  ·  " + save.xp);
         ui.hpTrack.setAttribute("aria-valuenow", String(hpShown));
         ui.hpTrack.setAttribute("aria-valuemax", String(save.maxHp));
-        ui.xpTrack.setAttribute("aria-valuenow", String(save.xp));
+        ui.xpTrack.setAttribute("aria-valuenow", String(bar));
         ui.xpTrack.setAttribute("aria-valuemax", String(need));
-        updateShopButtons();
+        paintShop(document.getElementById("gold-buttons"), Dungeon.GOLD_UPGRADES, "gold");
+        paintShop(document.getElementById("shop-buttons"), Dungeon.XP_UPGRADES, "xp");
     }
 
-    function updateShopButtons() {
-        const buttons = document.querySelectorAll(".upgrade");
+    function rankList(ranks) {
+        const list = [];
+        const keys = ranks ? Object.keys(ranks) : [];
+        for (let i = 0; i < keys.length; i++) {
+            list.push(ranks[keys[i]]);
+        }
+        return list;
+    }
+
+    function paintShop(root, list, currency) {
+        if (!root) {
+            return;
+        }
+        const buttons = root.querySelectorAll(".upgrade");
+        const ranks = currency === "xp" ? save.xpRanks : save.goldRanks;
+        const purse = currency === "xp" ? save.xp : save.gold;
+        const suffix = currency === "xp" ? "xp" : "g";
         for (let i = 0; i < buttons.length; i++) {
             const button = buttons[i];
-            const upgrade = Dungeon.upgradeById(button.dataset.upgrade);
+            const upgrade = list[i];
             if (!upgrade) {
                 continue;
             }
-            const rank = save.ranks[upgrade.id] || 0;
+            const rank = ranks[upgrade.id] || 0;
             const maxed = !!(upgrade.maxRank && rank >= upgrade.maxRank);
             const cost = Dungeon.upgradeCost(upgrade, rank);
             button.querySelector(".upgrade-name").firstChild.nodeValue = upgrade.name;
             button.querySelector(".upgrade-rank").textContent = maxed ? "MAX" : "r" + rank;
             button.querySelector(".upgrade-detail").textContent = upgrade.detail;
-            button.querySelector(".upgrade-cost").textContent = maxed ? "—" : formatGold(cost) + "g";
-            button.classList.toggle("poor", !maxed && save.gold < cost);
+            button.querySelector(".upgrade-cost").textContent = maxed ? "—" : formatGold(cost) + suffix;
+            button.classList.toggle("poor", !maxed && purse < cost);
             button.disabled = maxed;
             button.setAttribute(
                 "aria-label",
-                upgrade.name + ", " + upgrade.detail + (maxed ? ", maxed" : ", costs " + cost + " gold")
+                upgrade.name + ", " + upgrade.detail + (maxed ? ", maxed" : ", costs " + cost + " " + (currency === "xp" ? "XP" : "gold"))
             );
         }
     }
 
-    function buyUpgrade(id) {
-        const upgrade = Dungeon.upgradeById(id);
+    function shakeButton(button) {
+        if (!button) {
+            return;
+        }
+        button.classList.remove("shake");
+        void button.offsetWidth;
+        button.classList.add("shake");
+    }
+
+    function buy(currency, id) {
+        const xp = currency === "xp";
+        if (xp && mode !== "run") {
+            return;
+        }
+        if (!xp && mode !== "menu") {
+            return;
+        }
+        const upgrade = xp ? Dungeon.xpUpgradeById(id) : Dungeon.goldUpgradeById(id);
         if (!upgrade) {
             return;
         }
-        const rank = save.ranks[id] || 0;
+        const ranks = xp ? save.xpRanks : save.goldRanks;
+        const rank = ranks[id] || 0;
         if (upgrade.maxRank && rank >= upgrade.maxRank) {
             return;
         }
         const cost = Dungeon.upgradeCost(upgrade, rank);
-        if (save.gold < cost) {
-            toast("Need " + cost + " gold");
-            const button = document.querySelector('.upgrade[data-upgrade="' + id + '"]');
-            if (button) {
-                button.classList.remove("shake");
-                // Restart the CSS animation if they tap again immediately.
-                void button.offsetWidth;
-                button.classList.add("shake");
-            }
+        const purse = xp ? save.xp : save.gold;
+        const rootId = xp ? "shop-buttons" : "gold-buttons";
+        const button = document.querySelector("#" + rootId + ' .upgrade[data-upgrade="' + id + '"]');
+        if (purse < cost) {
+            toast("Need " + cost + (xp ? " XP" : " gold"));
+            shakeButton(button);
             return;
         }
-        save.gold -= cost;
-        save.ranks[id] = rank + 1;
-        upgrade.apply(save);
+        if (xp) {
+            save.xp -= cost;
+        } else {
+            save.gold -= cost;
+        }
+        ranks[id] = rank + 1;
+        Dungeon.recomputeStats(save);
+        if (!xp) {
+            save.hp = save.maxHp;
+        }
         toast(upgrade.name + " upgraded");
         markDirty();
         flushSave();
@@ -778,11 +943,9 @@
         renderHud();
     }
 
-    function buildShop() {
-        const root = document.getElementById("shop-buttons");
-        const upgrades = Dungeon.UPGRADES;
-        for (let i = 0; i < upgrades.length; i++) {
-            const upgrade = upgrades[i];
+    function buildShop(root, list, currency) {
+        for (let i = 0; i < list.length; i++) {
+            const upgrade = list[i];
             const button = document.createElement("button");
             button.type = "button";
             button.className = "upgrade";
@@ -793,13 +956,19 @@
                 '<span class="upgrade-detail"></span>' +
                 '<span class="upgrade-cost"></span>';
             button.addEventListener("click", function () {
-                buyUpgrade(upgrade.id);
+                buy(currency, upgrade.id);
             });
             root.appendChild(button);
         }
     }
 
     function bindInput() {
+        ui.start.addEventListener("click", function () {
+            startRun();
+        });
+        ui.summaryButton.addEventListener("click", function () {
+            backToMenu();
+        });
         ui.reset.addEventListener("click", function () {
             const now = performance.now();
             if (now < resetArmedUntil) {
@@ -808,11 +977,15 @@
                 return;
             }
             resetArmedUntil = now + 2200;
-            toast("Tap reset again to start over");
+            toast("Tap reset again to wipe the save");
         });
 
         document.addEventListener("touchmove", function (event) {
-            if (event.target.closest && event.target.closest("#shop")) {
+            if (event.target.closest && (
+                event.target.closest("#shop") ||
+                event.target.closest("#menu") ||
+                event.target.closest("#summary")
+            )) {
                 return;
             }
             event.preventDefault();
@@ -884,18 +1057,20 @@
         view.worldW = WORLD_W;
     }
 
-    buildShop();
+    buildShop(document.getElementById("gold-buttons"), Dungeon.GOLD_UPGRADES, "gold");
+    buildShop(document.getElementById("shop-buttons"), Dungeon.XP_UPGRADES, "xp");
     bindInput();
-    seedEnemies();
     layout();
     if (typeof ResizeObserver === "function") {
         new ResizeObserver(layout).observe(stage);
     }
     window.addEventListener("resize", layout);
-    renderHud();
-    if (freshSave) {
-        toast("Your knight fights alone. Spend gold on the upgrades below.", 3.4);
+    if (save.inRun) {
+        resumeRun();
+    } else {
+        setScreen("menu");
     }
+    renderHud();
 
     let last = 0;
     function frame(now) {
@@ -913,7 +1088,9 @@
         if (dt > 0) {
             update(dt);
         }
-        Dungeon.drawFrame(ctx, view, sim);
+        if (mode !== "menu") {
+            Dungeon.drawFrame(ctx, view, sim);
+        }
         renderHud();
     }
 

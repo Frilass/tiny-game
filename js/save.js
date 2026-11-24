@@ -1,28 +1,15 @@
 // localStorage persistence. The live sim (positions, cooldowns) is not
-// saved — only progression. A bad or partial blob falls back to defaults
-// so a corrupt save cannot blank the game.
+// saved — only the run and the permanent gold track.
 //
-// Load this script after upgrades.js. New upgrade ids picked up from
-// Dungeon.UPGRADES start at rank 0 for existing saves.
+// v1 saves (the endless pit) keep their gold and gold-shop ranks. Level,
+// loose XP, and stats that came from old level-ups are dropped, and the
+// knight is sent to the menu. A bad blob falls back to a fresh menu save.
+//
+// Load this script after upgrades.js.
 (function (Dungeon) {
     "use strict";
 
     const SAVE_KEY = "slime-pit-save";
-
-    function defaultSave() {
-        return {
-            v: 1,
-            level: 1,
-            xp: 0,
-            gold: 0,
-            hp: 48,
-            maxHp: 48,
-            strength: 5,
-            attackSpeed: 1,
-            kills: 0,
-            ranks: {}
-        };
-    }
 
     function clamp(value, min, max, fallback) {
         if (typeof value !== "number" || !isFinite(value)) {
@@ -31,14 +18,58 @@
         return Math.min(max, Math.max(min, value));
     }
 
-    function applyRanks(save, rawRanks) {
-        const ranks = rawRanks && typeof rawRanks === "object" ? rawRanks : {};
-        const upgrades = Dungeon.UPGRADES || [];
-        save.ranks = {};
+    function blankRanks(list) {
+        const ranks = {};
+        const upgrades = list || [];
         for (let i = 0; i < upgrades.length; i++) {
-            const upgrade = upgrades[i];
-            const maxRank = upgrade.maxRank || 999;
-            save.ranks[upgrade.id] = Math.round(clamp(ranks[upgrade.id], 0, maxRank, 0));
+            ranks[upgrades[i].id] = 0;
+        }
+        return ranks;
+    }
+
+    function readRanks(list, raw) {
+        const ranks = blankRanks(list);
+        const source = raw && typeof raw === "object" ? raw : {};
+        const ids = Object.keys(ranks);
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            const upgrade = list[i];
+            const maxRank = upgrade && upgrade.maxRank ? upgrade.maxRank : 999;
+            ranks[id] = Math.round(clamp(source[id], 0, maxRank, 0));
+        }
+        return ranks;
+    }
+
+    function defaultSave() {
+        return {
+            v: 2,
+            gold: 0,
+            goldRanks: blankRanks(Dungeon.GOLD_UPGRADES),
+            xpRanks: blankRanks(Dungeon.XP_UPGRADES),
+            inRun: false,
+            floor: 1,
+            level: 1,
+            xp: 0,
+            xpBar: 0,
+            hp: 48,
+            maxHp: 48,
+            strength: 5,
+            attackSpeed: 1,
+            floorKills: 0,
+            runGold: 0,
+            runKills: 0
+        };
+    }
+
+    function finish(save) {
+        const loadedHp = save.hp;
+        if (typeof Dungeon.recomputeStats === "function") {
+            Dungeon.recomputeStats(save, true);
+        }
+        if (!save.inRun || loadedHp <= 0) {
+            save.hp = save.maxHp;
+        } else {
+            save.hp = Math.min(save.maxHp, loadedHp);
         }
         return save;
     }
@@ -50,29 +81,46 @@
         try {
             const raw = localStorage.getItem(SAVE_KEY);
             if (!raw) {
-                return applyRanks(defaultSave(), {});
+                return finish(defaultSave());
             }
             const data = JSON.parse(raw);
             if (!data || typeof data !== "object") {
-                return applyRanks(defaultSave(), {});
+                return finish(defaultSave());
             }
             const save = defaultSave();
-            save.level = Math.round(clamp(data.level, 1, 200, 1));
-            save.xp = Math.round(clamp(data.xp, 0, 100000000, 0));
             save.gold = Math.round(clamp(data.gold, 0, 100000000, 0));
-            save.maxHp = Math.round(clamp(data.maxHp, 1, 100000, 48));
-            save.hp = clamp(data.hp, 0, save.maxHp, save.maxHp);
-            save.strength = Math.round(clamp(data.strength, 1, 100000, 5) * 10) / 10;
-            save.attackSpeed = Math.round(clamp(data.attackSpeed, 0.2, 20, 1) * 100) / 100;
-            save.kills = Math.round(clamp(data.kills, 0, 100000000, 0));
-            applyRanks(save, data.ranks);
-            // Dying and refreshing should not stick the knight at 0 HP.
-            if (save.hp <= 0) {
-                save.hp = save.maxHp;
+
+            // Endless-pit saves stored gold-shop ranks on `ranks`.
+            const oldGoldRanks = data.goldRanks || data.ranks;
+            save.goldRanks = readRanks(Dungeon.GOLD_UPGRADES, oldGoldRanks);
+            save.xpRanks = readRanks(Dungeon.XP_UPGRADES, data.v >= 2 ? data.xpRanks : {});
+
+            const legacy = !(data.v >= 2);
+            if (legacy) {
+                save.inRun = false;
+                save.floor = 1;
+                save.level = 1;
+                save.xp = 0;
+                save.xpBar = 0;
+                save.floorKills = 0;
+                save.runGold = 0;
+                save.runKills = 0;
+                return finish(save);
             }
-            return save;
+
+            save.inRun = !!data.inRun;
+            const floorCount = (Dungeon.FLOORS && Dungeon.FLOORS.length) || 10;
+            save.floor = Math.round(clamp(data.floor, 1, floorCount, 1));
+            save.level = Math.round(clamp(data.level, 1, 99, 1));
+            save.xp = Math.round(clamp(data.xp, 0, 100000000, 0));
+            save.xpBar = Math.round(clamp(data.xpBar, 0, 100000000, 0));
+            save.floorKills = Math.round(clamp(data.floorKills, 0, 99, 0));
+            save.runGold = Math.round(clamp(data.runGold, 0, 100000000, 0));
+            save.runKills = Math.round(clamp(data.runKills, 0, 100000000, 0));
+            save.hp = clamp(data.hp, 0, 100000, 48);
+            return finish(save);
         } catch (err) {
-            return applyRanks(defaultSave(), {});
+            return finish(defaultSave());
         }
     };
 
