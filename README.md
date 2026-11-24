@@ -1,6 +1,8 @@
 # Slime Pit
 
-An idle dungeon for a phone home screen. One floor, side view. Your knight runs to the nearest slime, swings, and takes a few hits back. Kills pay XP, gold, and a little strength. Gold buys upgrades. Closing the page keeps your progress in this browser.
+An idle dungeon for a phone home screen. Ten floors, one slime kind on each. Your knight runs to the nearest slime, swings, and takes a few hits back. Clear every slime on a floor to go deeper. Floor 10 ends the run.
+
+Gold drops during a run and stays in your pocket after you die. Spend it on the menu. Those upgrades are permanent. XP is only for the run you are in. Leveling up does not raise your stats. Buying from the XP shop does. Death, or a cleared pit, sends you back to the menu at level 1 with the XP shop emptied. Gold and the gold shop stay.
 
 ## Run locally
 
@@ -12,7 +14,7 @@ npx serve .
 
 Visit the URL it prints (usually `http://localhost:3000`).
 
-Paths are relative, so the same files also work on GitHub Pages under a project subpath like `https://user.github.io/slime-pit/`.
+Paths are relative, so the same files also work on GitHub Pages under a project subpath like `https://user.github.io/tiny-game/`.
 
 Opening `index.html` directly (`file://`) runs the game. The service worker is registered only on `http:` and `https:`, so a file open does not throw.
 
@@ -26,9 +28,10 @@ The home-screen icon, standalone window, and notch padding come from the tags in
 
 ## How to extend
 
-- **New enemy:** copy an object in `js/enemies.js` (`ENEMY_TYPES`). `minLevel` gates when it can spawn and `weight` sets how often. Leave `draw` as `"slime"` to reuse the blob, with your own colors and `radius`. A different `draw` value needs a branch in `drawEnemy` inside `js/render.js`.
-- **New upgrade:** copy an object in `js/upgrades.js` (`UPGRADES`). The shop adds one button per entry. `apply(save)` should mutate the save (for example `save.strength` or `save.maxHp`). Rank and cost are handled for you.
-- **Pace:** XP to level up and the level-up bonuses (`LEVEL_MAX_HP`, `LEVEL_STRENGTH`) live at the top of `js/game.js`. Per-kill strength is `strengthGain` on the enemy.
+- **New floor:** copy an object in `js/enemies.js` (`FLOORS`). `count` is how many of that slime spawn. Colors and `radius` feed the blob. A different `draw` value needs a branch in `drawEnemy` inside `js/render.js`. There is no respawn on a floor.
+- **Gold upgrade:** copy an object in `js/upgrades.js` (`GOLD_UPGRADES`). The menu builds one button per entry. Also teach `recomputeStats` what the rank adds.
+- **XP upgrade:** copy an object in `XP_UPGRADES`. Same idea, spent from the XP pool during a run. Ranks reset when the run ends.
+- **Pace:** XP to the next level is `xpToNext` in `js/game.js`. It does not change strength or HP.
 - **Offline cache:** add new files to `FILES_TO_CACHE` in `service-worker.js` so a first install has them before they are requested. Online loads refresh the saved copies on their own. Change `CACHE_NAME` when you want the next visit to throw away older caches immediately.
 
-Progress is stored in `localStorage` under `slime-pit-save`. The Reset button in the corner asks for a second tap, then clears that key.
+Progress is stored in `localStorage` under `slime-pit-save`. An older save keeps its gold and gold-shop ranks and opens on the menu. Reset save on the menu asks for a second tap, then clears that key.

@@ -59,12 +59,14 @@
             font-size: 12px;
             padding: 8px;
         }
-        #shop-buttons {
+        #shop-buttons,
+        #gold-buttons {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 8px;
         }
-        .upgrade { width: auto; }
+        .upgrade, #start, #summary-menu, #reset { width: auto; }
+        #menu, #run { min-height: 0; }
     </style>
 </head>
 <body>
@@ -107,36 +109,59 @@
         })();
     </script>
     <div id="app">
-        <header id="hud">
-            <div class="stats">
-                <div class="stat"><span class="label">Lv</span><strong id="level">1</strong></div>
-                <div class="stat"><span class="label">Str</span><strong id="strength">5</strong></div>
-                <div class="stat"><span class="label">Slain</span><strong id="kills">0</strong></div>
-                <div class="stat gold"><span class="coin" aria-hidden="true"></span><strong id="gold">0</strong></div>
-                <button id="reset" type="button">Reset</button>
-            </div>
-            <div class="meter">
-                <div class="meter-label"><span>HP</span><span id="hpText">48/48</span></div>
-                <div class="track" id="hpTrack" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="48" aria-valuenow="48">
-                    <div id="hpFill"></div>
-                </div>
-            </div>
-            <div class="meter">
-                <div class="meter-label"><span>XP</span><span id="xpText">0/26</span></div>
-                <div class="track" id="xpTrack" role="meter" aria-label="Experience" aria-valuemin="0" aria-valuemax="26" aria-valuenow="0">
-                    <div id="xpFill"></div>
-                </div>
-            </div>
-        </header>
+        <section id="menu">
+            <h1>Slime Pit</h1>
+            <p class="blurb">Ten floors. Clear each one. Gold stays with you. A death sends you back here, level 1.</p>
+            <button id="start" type="button">Start Run</button>
+            <p class="gold-line"><span class="coin" aria-hidden="true"></span><strong id="menu-gold">0</strong> gold</p>
+            <p id="perm-stats">Power 5  ·  HP 48  ·  Speed 1.0</p>
+            <section id="gold-shop" aria-label="Gold shop">
+                <h2>Gold shop</h2>
+                <div id="gold-buttons"></div>
+            </section>
+            <p id="menu-note" role="status"></p>
+            <button id="reset" type="button">Reset save</button>
+        </section>
 
-        <div id="stage">
-            <canvas id="game" width="520" height="320" aria-label="Dungeon floor. Your knight fights slimes automatically."></canvas>
-            <p id="toast" role="status" aria-live="polite"></p>
-        </div>
+        <section id="run" hidden>
+            <header id="hud">
+                <div class="stats">
+                    <div class="stat"><span class="label">Floor</span><strong id="floor">1</strong></div>
+                    <div class="stat"><span class="label">Left</span><strong id="left">0</strong></div>
+                    <div class="stat"><span class="label">Lv</span><strong id="level">1</strong></div>
+                    <div class="stat"><span class="label">Str</span><strong id="strength">5</strong></div>
+                    <div class="stat gold"><span class="coin" aria-hidden="true"></span><strong id="gold">0</strong></div>
+                </div>
+                <div class="meter">
+                    <div class="meter-label"><span>HP</span><span id="hpText">48/48</span></div>
+                    <div class="track" id="hpTrack" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="48" aria-valuenow="48">
+                        <div id="hpFill"></div>
+                    </div>
+                </div>
+                <div class="meter">
+                    <div class="meter-label"><span>XP</span><span id="xpText">0/26</span></div>
+                    <div class="track" id="xpTrack" role="meter" aria-label="Experience toward the next level" aria-valuemin="0" aria-valuemax="26" aria-valuenow="0">
+                        <div id="xpFill"></div>
+                    </div>
+                </div>
+            </header>
 
-        <section id="shop" aria-label="Upgrades">
-            <h2>Upgrades</h2>
-            <div id="shop-buttons"></div>
+            <div id="stage">
+                <canvas id="game" width="520" height="320" aria-label="Dungeon floor. Your knight fights slimes automatically."></canvas>
+                <p id="toast" role="status" aria-live="polite"></p>
+            </div>
+
+            <section id="shop" aria-label="XP shop">
+                <h2 id="shop-title">XP shop</h2>
+                <div id="shop-buttons"></div>
+            </section>
+
+            <div id="summary" hidden role="dialog" aria-labelledby="summary-title">
+                <h2 id="summary-title">Defeated</h2>
+                <p id="summary-floor">Reached floor 1.</p>
+                <p id="summary-gold">Gold earned: 0</p>
+                <button id="summary-menu" type="button">Menu</button>
+            </div>
         </section>
     </div>
 

@@ -3,13 +3,13 @@
 // Online loads are network-first: a fresh response replaces the cache entry,
 // and a failed network read falls back to that entry so offline play still works.
 // CACHE_NAME is bumped so activate() drops the previous cache and an
-// installed phone reloads onto this version. slime-pit-v3 is the shared
-// walk-bound fix; v2 was the network-first update.
+// installed phone reloads onto this version. slime-pit-v4 is the
+// floor-and-run update.
 // Add new URLs to FILES_TO_CACHE so the first install can play offline
 // before each file has been requested on its own.
 // Paths are relative to this script, which keeps GitHub Pages subpaths working.
 
-const CACHE_NAME = "slime-pit-v3";
+const CACHE_NAME = "slime-pit-v4";
 
 const FILES_TO_CACHE = [
     "./",

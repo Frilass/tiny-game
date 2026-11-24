@@ -1,39 +1,27 @@
-// Enemy catalog for the single dungeon floor.
+// One slime kind per floor. Floors run from 1 to 10.
 //
-// To add an enemy:
-//   1. Copy an entry below. `id` must be unique.
-//   2. Set minLevel (the player level that unlocks it) and weight
-//      (how often it is picked relative to other unlocked entries).
-//   3. Tune combat numbers. hpPerLevel / damagePerLevel are added once
-//      per player level above 1 when the enemy is spawned, so older
-//      slimes do not stay paper-thin.
-//   4. Leave draw: "slime" to reuse the blob renderer. Colors and
-//      radius are read straight from this object. A new draw value
-//      needs a matching branch in js/render.js (drawEnemy).
-//
-// Game.js copies stats onto each spawn and keeps `look` pointing here
-// for colors. Do not mutate these objects at runtime.
+// To add or retune a floor, edit an entry in FLOORS. `count` is how many
+// of that slime spawn, and it does not change during the floor. Colors
+// are read by the blob renderer in js/render.js. A new `draw` value needs
+// a matching branch in drawEnemy. Do not mutate these objects at runtime.
 (function (Dungeon) {
     "use strict";
 
-    Dungeon.ENEMY_TYPES = [
+    Dungeon.FLOORS = [
         {
             id: "green",
             name: "Slime",
-            draw: "slime",
-            minLevel: 1,
-            weight: 8,
-            hp: 22,
-            hpPerLevel: 2,
-            damage: 3,
-            damagePerLevel: 0.25,
-            speed: 28,
-            attackCooldown: 1.35,
-            xp: 6,
-            gold: 4,
-            strengthGain: 0.1,
+            slimeLevel: 1,
+            count: 3,
+            hp: 12,
+            damage: 2,
+            speed: 26,
+            attackCooldown: 1.4,
+            xp: 10,
+            gold: 5,
             radius: 18,
             hop: 12,
+            draw: "slime",
             body: "#46d66e",
             dark: "#178a38",
             shine: "#e7ffe9",
@@ -41,22 +29,19 @@
             cheek: "#2eaf58"
         },
         {
-            id: "blue",
+            id: "tide",
             name: "Tide Slime",
+            slimeLevel: 2,
+            count: 3,
+            hp: 22,
+            damage: 4,
+            speed: 24,
+            attackCooldown: 1.45,
+            xp: 12,
+            gold: 6,
+            radius: 19,
+            hop: 10,
             draw: "slime",
-            minLevel: 3,
-            weight: 5,
-            hp: 36,
-            hpPerLevel: 3,
-            damage: 5,
-            damagePerLevel: 0.3,
-            speed: 22,
-            attackCooldown: 1.5,
-            xp: 10,
-            gold: 7,
-            strengthGain: 0.1,
-            radius: 20,
-            hop: 9,
             body: "#3aa0ff",
             dark: "#1a4fbf",
             shine: "#e5f4ff",
@@ -66,20 +51,17 @@
         {
             id: "amber",
             name: "Amber Slime",
-            draw: "slime",
-            minLevel: 6,
-            weight: 4,
-            hp: 30,
-            hpPerLevel: 2.5,
-            damage: 6,
-            damagePerLevel: 0.35,
-            speed: 48,
-            attackCooldown: 1.05,
+            slimeLevel: 3,
+            count: 4,
+            hp: 28,
+            damage: 5,
+            speed: 42,
+            attackCooldown: 1.15,
             xp: 12,
-            gold: 9,
-            strengthGain: 0.15,
+            gold: 7,
             radius: 16,
-            hop: 15,
+            hop: 14,
+            draw: "slime",
             body: "#f0a020",
             dark: "#a85a08",
             shine: "#fff1cc",
@@ -87,46 +69,151 @@
             cheek: "#d4841a"
         },
         {
+            id: "bloom",
+            name: "Bloom Slime",
+            slimeLevel: 4,
+            count: 4,
+            hp: 34,
+            damage: 5,
+            speed: 22,
+            attackCooldown: 1.4,
+            xp: 14,
+            gold: 8,
+            radius: 20,
+            hop: 9,
+            draw: "slime",
+            body: "#ff7eb6",
+            dark: "#b43b78",
+            shine: "#ffe4f2",
+            eye: "#3a1024",
+            cheek: "#e85a9a"
+        },
+        {
+            id: "mire",
+            name: "Mire Slime",
+            slimeLevel: 5,
+            count: 4,
+            hp: 40,
+            damage: 6,
+            speed: 20,
+            attackCooldown: 1.5,
+            xp: 14,
+            gold: 8,
+            radius: 21,
+            hop: 8,
+            draw: "slime",
+            body: "#2fbfa8",
+            dark: "#0e6e62",
+            shine: "#d9fff6",
+            eye: "#042824",
+            cheek: "#1a9a86"
+        },
+        {
+            id: "cinder",
+            name: "Cinder Slime",
+            slimeLevel: 6,
+            count: 5,
+            hp: 36,
+            damage: 7,
+            speed: 38,
+            attackCooldown: 1.1,
+            xp: 16,
+            gold: 9,
+            radius: 17,
+            hop: 13,
+            draw: "slime",
+            body: "#e24b3a",
+            dark: "#8a2018",
+            shine: "#ffd2c8",
+            eye: "#2a0a08",
+            cheek: "#c43428"
+        },
+        {
+            id: "gilded",
+            name: "Gilded Slime",
+            slimeLevel: 7,
+            count: 5,
+            hp: 48,
+            damage: 7,
+            speed: 18,
+            attackCooldown: 1.5,
+            xp: 16,
+            gold: 10,
+            radius: 22,
+            hop: 8,
+            draw: "slime",
+            body: "#f2d15a",
+            dark: "#a88410",
+            shine: "#fff6cc",
+            eye: "#2a2204",
+            cheek: "#d4ae30"
+        },
+        {
             id: "brute",
             name: "Brute Slime",
-            draw: "slime",
-            minLevel: 9,
-            weight: 2,
-            hp: 72,
-            hpPerLevel: 4,
-            damage: 8,
-            damagePerLevel: 0.4,
+            slimeLevel: 8,
+            count: 5,
+            hp: 64,
+            damage: 9,
             speed: 16,
-            attackCooldown: 1.65,
-            xp: 20,
-            gold: 14,
-            strengthGain: 0.2,
-            radius: 28,
+            attackCooldown: 1.6,
+            xp: 18,
+            gold: 12,
+            radius: 27,
             hop: 7,
+            draw: "slime",
             body: "#b07cff",
             dark: "#5a2ea8",
             shine: "#f3e8ff",
             eye: "#1a0830",
             cheek: "#8a56e0"
+        },
+        {
+            id: "ash",
+            name: "Ash Slime",
+            slimeLevel: 9,
+            count: 6,
+            hp: 52,
+            damage: 8,
+            speed: 30,
+            attackCooldown: 1.25,
+            xp: 18,
+            gold: 11,
+            radius: 18,
+            hop: 11,
+            draw: "slime",
+            body: "#b7b1a8",
+            dark: "#5c574f",
+            shine: "#f4f1ea",
+            eye: "#1c1a16",
+            cheek: "#8a847a"
+        },
+        {
+            id: "magma",
+            name: "Magma Slime",
+            slimeLevel: 10,
+            count: 6,
+            hp: 78,
+            damage: 11,
+            speed: 18,
+            attackCooldown: 1.45,
+            xp: 22,
+            gold: 16,
+            radius: 24,
+            hop: 8,
+            draw: "slime",
+            body: "#ff5a1f",
+            dark: "#6a1408",
+            shine: "#ffe0c2",
+            eye: "#1a0602",
+            cheek: "#d43810"
         }
     ];
 
-    // Weighted pick among types the player has unlocked.
-    Dungeon.pickEnemyType = function (level) {
-        const all = Dungeon.ENEMY_TYPES;
-        const pool = all.filter((type) => level >= type.minLevel);
-        const usable = pool.length ? pool : all;
-        let total = 0;
-        for (let i = 0; i < usable.length; i++) {
-            total += usable[i].weight;
-        }
-        let roll = Math.random() * total;
-        for (let i = 0; i < usable.length; i++) {
-            roll -= usable[i].weight;
-            if (roll <= 0) {
-                return usable[i];
-            }
-        }
-        return usable[0];
+    // Floor numbers are 1-based. Out of range clamps to the last floor.
+    Dungeon.floorDef = function (floor) {
+        const list = Dungeon.FLOORS;
+        const index = Math.max(1, Math.min(list.length, Math.round(floor) || 1)) - 1;
+        return list[index];
     };
 })(window.Dungeon = window.Dungeon || {});
